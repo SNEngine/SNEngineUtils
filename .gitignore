@@ -1,0 +1,21 @@
+# Исполняемые файлы (EXE)
+*.exe
+*.com
+*.msi
+*.dll
+
+# Объекты и библиотеки компиляции
+*.o
+*.obj
+*.a
+*.lib
+*.pdb
+
+# Временные файлы VS Code
+.vscode/
+.history/
+*.log
+
+# Системные файлы Windows
+Thumbs.db
+desktop.ini
