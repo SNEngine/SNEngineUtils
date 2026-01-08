@@ -1,6 +1,7 @@
 *.com
 *.msi
 *.dll
+*.exe
 
 # Объекты и библиотеки компиляции
 *.o
@@ -17,3 +18,8 @@
 # Системные файлы Windows
 Thumbs.db
 desktop.ini
+/Linux
+/build
+SNEngine_Cleaner
+SNEngine_Cleaner.exe
+SNEngine_Symbols.exe
