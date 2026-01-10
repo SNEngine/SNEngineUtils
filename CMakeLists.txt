@@ -17,13 +17,27 @@ target_link_libraries(SNEngine_Cleaner)
 add_executable(SNEngine_Symbols presetup.cpp tinyfiledialogs)
 target_link_libraries(SNEngine_Symbols)
 
+# Code Counter executable
+add_executable(SNEngine_Code_Counter code_counter.cpp)
+target_link_libraries(SNEngine_Code_Counter)
+
+# Novel Counter executable
+add_executable(SNEngine_Novel_Counter novel_counter.cpp)
+target_link_libraries(SNEngine_Novel_Counter)
+
 # Platform-specific configurations
 if(WIN32)
     # Windows-specific libraries for tinyfiledialogs
     target_link_libraries(SNEngine_Symbols shlwapi ole32 comdlg32 comctl32)
-    
+
     # Windows-specific libraries for cleaner
     target_link_libraries(SNEngine_Cleaner shlwapi)
+
+    # Windows-specific libraries for code counter
+    target_link_libraries(SNEngine_Code_Counter)
+
+    # Windows-specific libraries for novel counter
+    target_link_libraries(SNEngine_Novel_Counter)
 elseif(UNIX AND NOT APPLE)
     # Linux-specific
     if(PKG_CONFIG_FOUND)
@@ -33,9 +47,15 @@ elseif(UNIX AND NOT APPLE)
             target_compile_options(SNEngine_Symbols PRIVATE ${GTK3_CFLAGS_OTHER})
         endif()
     endif()
+
+    # Linux-specific libraries for code counter
+    target_link_libraries(SNEngine_Code_Counter pthread)
+
+    # Linux-specific libraries for novel counter
+    target_link_libraries(SNEngine_Novel_Counter pthread)
 endif()
 
 # Install targets
-install(TARGETS SNEngine_Cleaner SNEngine_Symbols
+install(TARGETS SNEngine_Cleaner SNEngine_Symbols SNEngine_Code_Counter SNEngine_Novel_Counter
     RUNTIME DESTINATION bin
 )

@@ -25,23 +25,6 @@
 // SOFTWARE.
 //
 //---------------------------------------------------------------------------------------
-//
-// To dynamically select std::filesystem where available on most platforms,
-// you could use:
-//
-// #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || (defined(__cplusplus) && __cplusplus >= 201703L)) && defined(__has_include)
-// #if __has_include(<filesystem>) && (!defined(__MAC_OS_X_VERSION_MIN_REQUIRED) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 101500)
-// #define GHC_USE_STD_FS
-// #include <filesystem>
-// namespace fs = std::filesystem;
-// #endif
-// #endif
-// #ifndef GHC_USE_STD_FS
-// #include <ghc/filesystem.hpp>
-// namespace fs = ghc::filesystem;
-// #endif
-//
-//---------------------------------------------------------------------------------------
 #ifndef GHC_FILESYSTEM_H
 #define GHC_FILESYSTEM_H
 
@@ -53,7 +36,7 @@
 
 #ifndef GHC_OS_DETECTED
 #if defined(__APPLE__) && defined(__MACH__)
-#define GHC_OS_MACOS
+#define GHC_OS_APPLE
 #elif defined(__linux__)
 #define GHC_OS_LINUX
 #if defined(__ANDROID__)
@@ -181,7 +164,7 @@
 #include <langinfo.h>
 #endif
 #endif
-#ifdef GHC_OS_MACOS
+#ifdef GHC_OS_APPLE
 #include <Availability.h>
 #endif
 
@@ -308,7 +291,7 @@
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 // ghc::filesystem version in decimal (major * 10000 + minor * 100 + patch)
-#define GHC_FILESYSTEM_VERSION 10514L
+#define GHC_FILESYSTEM_VERSION 10515L
 
 #if !defined(GHC_WITH_EXCEPTIONS) && (defined(__EXCEPTIONS) || defined(__cpp_exceptions) || defined(_CPPUNWIND))
 #define GHC_WITH_EXCEPTIONS
@@ -1159,6 +1142,10 @@ GHC_FS_API void create_hard_link(const path& to, const path& new_hard_link, std:
 GHC_FS_API uintmax_t hard_link_count(const path& p, std::error_code& ec) noexcept;
 #endif
 
+#if defined(GHC_OS_WINDOWS) && (!defined(__GLIBCXX__) || (defined(_GLIBCXX_HAVE__WFOPEN) && defined(_GLIBCXX_USE_WCHAR_T)))
+#define GHC_HAS_FSTREAM_OPEN_WITH_WCHAR
+#endif
+
 // Non-C++17 add-on std::fstream wrappers with path
 template <class charT, class traits = std::char_traits<charT>>
 class basic_filebuf : public std::basic_filebuf<charT, traits>
@@ -1170,7 +1157,7 @@ public:
     const basic_filebuf& operator=(const basic_filebuf&) = delete;
     basic_filebuf<charT, traits>* open(const path& p, std::ios_base::openmode mode)
     {
-#if defined(GHC_OS_WINDOWS) && !defined(__GLIBCXX__)
+#ifdef GHC_HAS_FSTREAM_OPEN_WITH_WCHAR
         return std::basic_filebuf<charT, traits>::open(p.wstring().c_str(), mode) ? this : 0;
 #else
         return std::basic_filebuf<charT, traits>::open(p.string().c_str(), mode) ? this : 0;
@@ -1183,7 +1170,7 @@ class basic_ifstream : public std::basic_ifstream<charT, traits>
 {
 public:
     basic_ifstream() {}
-#if defined(GHC_OS_WINDOWS) && !defined(__GLIBCXX__)
+#ifdef GHC_HAS_FSTREAM_OPEN_WITH_WCHAR
     explicit basic_ifstream(const path& p, std::ios_base::openmode mode = std::ios_base::in)
         : std::basic_ifstream<charT, traits>(p.wstring().c_str(), mode)
     {
@@ -1206,7 +1193,7 @@ class basic_ofstream : public std::basic_ofstream<charT, traits>
 {
 public:
     basic_ofstream() {}
-#if defined(GHC_OS_WINDOWS) && !defined(__GLIBCXX__)
+#ifdef GHC_HAS_FSTREAM_OPEN_WITH_WCHAR
     explicit basic_ofstream(const path& p, std::ios_base::openmode mode = std::ios_base::out)
         : std::basic_ofstream<charT, traits>(p.wstring().c_str(), mode)
     {
@@ -1229,7 +1216,7 @@ class basic_fstream : public std::basic_fstream<charT, traits>
 {
 public:
     basic_fstream() {}
-#if defined(GHC_OS_WINDOWS) && !defined(__GLIBCXX__)
+#ifdef GHC_HAS_FSTREAM_OPEN_WITH_WCHAR
     explicit basic_fstream(const path& p, std::ios_base::openmode mode = std::ios_base::in | std::ios_base::out)
         : std::basic_fstream<charT, traits>(p.wstring().c_str(), mode)
     {
@@ -1954,7 +1941,7 @@ GHC_INLINE void create_symlink(const path& target_name, const path& new_symlink,
         ec = detail::make_error_code(detail::portable_error::not_supported);
         return;
     }
-#if defined(__GNUC__) && __GNUC__ >= 8
+#if defined(__GNUC__) && __GNUC__ >= 8  || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-function-type"
 #elif defined(_MSC_VER) && !defined(__INTEL_COMPILER) && !defined(__clang__)
@@ -1962,7 +1949,7 @@ GHC_INLINE void create_symlink(const path& target_name, const path& new_symlink,
 #pragma warning(disable : 4191)
 #endif
     static CreateSymbolicLinkW_fp api_call = reinterpret_cast<CreateSymbolicLinkW_fp>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "CreateSymbolicLinkW"));
-#if defined(__GNUC__) && __GNUC__ >= 8
+#if defined(__GNUC__) && __GNUC__ >= 8 || defined(__clang__)
 #pragma GCC diagnostic pop
 #elif defined(_MSC_VER) && !defined(__INTEL_COMPILER) && !defined(__clang__)
 #pragma warning(pop)
@@ -1983,7 +1970,7 @@ GHC_INLINE void create_symlink(const path& target_name, const path& new_symlink,
 
 GHC_INLINE void create_hardlink(const path& target_name, const path& new_hardlink, std::error_code& ec)
 {
-#if defined(__GNUC__) && __GNUC__ >= 8
+#if defined(__GNUC__) && __GNUC__ >= 8 || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-function-type"
 #elif defined(_MSC_VER) && !defined(__INTEL_COMPILER) && !defined(__clang__)
@@ -1991,7 +1978,7 @@ GHC_INLINE void create_hardlink(const path& target_name, const path& new_hardlin
 #pragma warning(disable : 4191)
 #endif
     static CreateHardLinkW_fp api_call = reinterpret_cast<CreateHardLinkW_fp>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "CreateHardLinkW"));
-#if defined(__GNUC__) && __GNUC__ >= 8
+#if defined(__GNUC__) && __GNUC__ >= 8 || defined(__clang__)
 #pragma GCC diagnostic pop
 #elif defined(_MSC_VER) && !defined(__INTEL_COMPILER) && !defined(__clang__)
 #pragma warning(pop)
@@ -2129,6 +2116,13 @@ private:
     element_type _handle;
 };
 
+// It seems GCC doesn't catch this, but Clang does
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=72751
+#if defined(__clang__) && defined(__MINGW32__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnested-anon-types"
+#endif
+
 #ifndef REPARSE_DATA_BUFFER_HEADER_SIZE
 typedef struct _REPARSE_DATA_BUFFER
 {
@@ -2163,6 +2157,10 @@ typedef struct _REPARSE_DATA_BUFFER
 #ifndef MAXIMUM_REPARSE_DATA_BUFFER_SIZE
 #define MAXIMUM_REPARSE_DATA_BUFFER_SIZE (16 * 1024)
 #endif
+#endif
+
+#if defined(__clang__) && defined(__MINGW32__)
+#pragma clang diagnostic pop
 #endif
 
 template <class T>
@@ -2260,7 +2258,7 @@ GHC_INLINE void timeToFILETIME(time_t t, FILETIME& ft)
 }
 
 template <typename INFO>
-GHC_INLINE uintmax_t hard_links_from_INFO(const INFO* info)
+GHC_INLINE uintmax_t hard_links_from_INFO(const INFO*)
 {
     return static_cast<uintmax_t>(-1);
 }
@@ -3170,7 +3168,7 @@ GHC_INLINE path path::extension() const
         auto iter = end();
         const auto& fn = *--iter;
         impl_string_type::size_type pos = fn._path.rfind('.');
-        if (pos != std::string::npos && pos > 0) {
+        if (pos != std::string::npos && pos > 0 && fn._path != "..") {
             return path(fn._path.substr(pos), native_format);
         }
     }
@@ -3318,6 +3316,9 @@ GHC_INLINE path path::lexically_relative(const path& base) const
         else if (element == "..") {
             --count;
         }
+    }
+    if (count == 0 && (a == end() || a->empty())) {
+        return path(".");
     }
     if (count < 0) {
         return path();
@@ -3987,7 +3988,7 @@ GHC_INLINE bool copy_file(const path& from, const path& to, copy_options options
     }
     ssize_t br, bw;
     while (true) {
-        do { br = ::read(in, buffer.data(), buffer.size()); } while(errno == EINTR);
+        do { br = ::read(in, buffer.data(), buffer.size()); } while(br == -1 && errno == EINTR);
         if(!br) {
             break;
         }
@@ -4239,7 +4240,7 @@ GHC_INLINE path current_path(std::error_code& ec)
     }
     return path(std::wstring(buffer.get()), path::native_format);
 #elif defined(__GLIBC__)
-    std::unique_ptr<char, decltype(&std::free)> buffer { ::getcwd(NULL, 0), std::free };
+    std::unique_ptr<char, decltype(&std::free)> buffer { ::get_current_dir_name(), std::free };
     if (buffer == nullptr) {
         ec = detail::make_system_error();
         return path();
@@ -4650,9 +4651,11 @@ GHC_INLINE void last_write_time(const path& p, file_time_type new_time, std::err
     if (!::SetFileTime(file.get(), 0, 0, &ft)) {
         ec = detail::make_system_error();
     }
-#elif defined(GHC_OS_MACOS) && \
-    (__MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_13) || (__IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_11_0) || \
-    (__TV_OS_VERSION_MIN_REQUIRED < __TVOS_11_0) || (__WATCH_OS_VERSION_MIN_REQUIRED < __WATCHOS_4_0)
+#elif defined(GHC_OS_APPLE) && \
+    (__MAC_OS_X_VERSION_MIN_REQUIRED && __MAC_OS_X_VERSION_MIN_REQUIRED < 101300 \
+     || __IPHONE_OS_VERSION_MIN_REQUIRED && __IPHONE_OS_VERSION_MIN_REQUIRED < 110000 \
+     || __TV_OS_VERSION_MIN_REQUIRED && __TVOS_VERSION_MIN_REQUIRED < 110000 \
+     || __WATCH_OS_VERSION_MIN_REQUIRED && __WATCHOS_VERSION_MIN_REQUIRED < 40000)
     struct ::stat fs;
     if (::stat(p.c_str(), &fs) == 0) {
         struct ::timeval tv[2];
@@ -5602,7 +5605,8 @@ public:
         if (!_base.empty()) {
             ZeroMemory(&_findData, sizeof(WIN32_FIND_DATAW));
             if ((_dirHandle = FindFirstFileW(GHC_NATIVEWP((_base / "*")), &_findData)) != INVALID_HANDLE_VALUE) {
-                if (std::wstring(_findData.cFileName) == L"." || std::wstring(_findData.cFileName) == L"..") {
+                if (wcscmp(_findData.cFileName, L".") == 0 ||
+                    wcscmp(_findData.cFileName, L"..") == 0) {
                     increment(_ec);
                 }
                 else {
@@ -5660,7 +5664,7 @@ public:
                     _dir_entry._path.clear();
                     break;
                 }
-            } while (std::wstring(_findData.cFileName) == L"." || std::wstring(_findData.cFileName) == L"..");
+            } while (wcscmp(_findData.cFileName, L".") == 0 || wcscmp(_findData.cFileName, L"..") == 0);
         }
         else {
             ec = _ec;
@@ -5704,7 +5708,7 @@ public:
         , _entry(nullptr)
     {
         if (!path.empty()) {
-            do { _dir = ::opendir(path.native().c_str()); } while(errno == EINTR);
+            do { _dir = ::opendir(path.native().c_str()); } while(errno == EINTR && !_dir);
             if (!_dir) {
                 auto error = errno;
                 _base = filesystem::path();
@@ -5730,8 +5734,10 @@ public:
             bool skip;
             do {
                 skip = false;
-                errno = 0;
-                do { _entry = ::readdir(_dir); } while(errno == EINTR);
+                do {
+                    errno = 0;
+                    _entry = ::readdir(_dir);
+                } while (errno == EINTR && !_entry);
                 if (_entry) {
                     _dir_entry._path = _base;
                     _dir_entry._path.append_name(_entry->d_name);

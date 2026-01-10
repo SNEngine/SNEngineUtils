@@ -31,28 +31,48 @@ if %errorlevel% equ 0 (
     goto error_exit
 )
 
-REM Create Windows directory and copy results
+REM Return to parent directory after build
 cd ..
-if not exist Windows mkdir Windows
-copy build\SNEngine_Cleaner.exe Windows\ >nul
-copy build\SNEngine_Symbols.exe Windows\ >nul
-copy cleanup_list.txt Windows\ >nul
+
+REM Create utility directories with platform subdirectories and copy results
+
+REM Create directory structure and copy SNEngine_Cleaner
+if not exist SNEngine_Cleaner mkdir SNEngine_Cleaner
+if not exist SNEngine_Cleaner\Windows mkdir SNEngine_Cleaner\Windows
+copy build\SNEngine_Cleaner.exe SNEngine_Cleaner\Windows\ >nul
+copy cleanup_list.txt SNEngine_Cleaner\Windows\ >nul
+
+REM Create directory structure and copy SNEngine_Symbols
+if not exist SNEngine_Symbols mkdir SNEngine_Symbols
+if not exist SNEngine_Symbols\Windows mkdir SNEngine_Symbols\Windows
+copy build\SNEngine_Symbols.exe SNEngine_Symbols\Windows\ >nul
+
+REM Create directory structure and copy SNEngine_Code_Counter
+if not exist SNEngine_Code_Counter mkdir SNEngine_Code_Counter
+if not exist SNEngine_Code_Counter\Windows mkdir SNEngine_Code_Counter\Windows
+copy build\SNEngine_Code_Counter.exe SNEngine_Code_Counter\Windows\ >nul
+
+REM Create directory structure and copy SNEngine_Novel_Counter
+if not exist SNEngine_Novel_Counter mkdir SNEngine_Novel_Counter
+if not exist SNEngine_Novel_Counter\Windows mkdir SNEngine_Novel_Counter\Windows
+copy build\SNEngine_Novel_Counter.exe SNEngine_Novel_Counter\Windows\ >nul
 
 REM Clean up build directory, keeping only executables and txt file
 cd build
-copy ..\cleanup_list.txt . >nul
 del /q /f CMakeCache.txt cmake_install.cmake Makefile CMakeConfigureLog.yaml cmake.check_cache
 del /q /f Makefile2 Makefile.cmake CMakeDirectoryInformation.cmake InstallScripts.json TargetDirectories.txt progress.marks
 rd /s /q CMakeFiles
 rd /s /q pkgRedirects
 del /q /f libtinyfiledialogs.a
+del /q /f *.obj *.cpp.obj *.c.obj
 cd ..
 
 echo Build completed!
-echo Created files in Windows directory:
-echo - SNEngine_Cleaner.exe
-echo - SNEngine_Symbols.exe
-echo - cleanup_list.txt
+echo Created directory structure:
+echo - SNEngine_Cleaner\Windows\SNEngine_Cleaner.exe (with cleanup_list.txt)
+echo - SNEngine_Symbols\Windows\SNEngine_Symbols.exe
+echo - SNEngine_Code_Counter\Windows\SNEngine_Code_Counter.exe
+echo - SNEngine_Novel_Counter\Windows\SNEngine_Novel_Counter.exe
 goto end
 
 :error_exit

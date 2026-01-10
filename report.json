@@ -1,0 +1,11 @@
+{
+  "engine": "SNEngine",
+  "characters": 4,
+  "nodes": 85,
+  "dialogues": 18,
+  "sentences": 20,
+  "chars": 1290,
+  "wait_time_seconds": 4,
+  "avg_chars_per_sentence": 64,
+  "estimated_playtime_minutes": 2.01
+}
