@@ -154,25 +154,24 @@ void process_dialogue_file(const fs::path& path, NovelStats& stats) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
+    std::string root_path = "";
+    std::string json_out = "";
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--json" && i + 1 < argc) {
+            json_out = argv[++i];
+        } else if (arg[0] != '-') {
+            root_path = arg;
+        }
+    }
+
+    if (root_path.empty()) {
         std::cout << "Usage: novel_counter <path> [--json <output.json>]" << std::endl;
         return 1;
     }
 
-    std::string root_path = argv[1];
-    std::string json_out = "";
-    for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "--json" && i + 1 < argc) {
-            json_out = argv[i+1];
-        }
-    }
-
     fs::path root = root_path;
-    if (!fs::exists(root) || !fs::is_directory(root)) {
-        std::cerr << "Error: Path " << root_path << " does not exist or is not a directory." << std::endl;
-        return 1;
-    }
-
     fs::path diag_path, char_path;
     bool d_f = false, c_f = false;
 
@@ -182,64 +181,60 @@ int main(int argc, char* argv[]) {
         if (d_f && c_f) break;
     }
 
-    if (!d_f || !c_f) {
-        std::cerr << "Validation Failed: This does not look like an SNEngine project." << std::endl;
-        std::cerr << "Required folders 'Dialogues' and 'Characters' not found." << std::endl;
-        return 1;
-    }
+    if (!d_f) { std::cerr << "Error: No Dialogues folder!" << std::endl; return 1; }
 
-    size_t asset_count = 0;
-    for (const auto& entry : fs::directory_iterator(diag_path)) {
-        if (entry.path().extension() == ".asset") asset_count++;
-    }
-
-    if (asset_count == 0) {
-        std::cerr << "Validation Failed: 'Dialogues' folder is empty or contains no .asset files." << std::endl;
-        return 1;
+    size_t dialogue_graphs = 0;
+    std::vector<fs::path> assets_to_process;
+    for (const auto& entry : fs::recursive_directory_iterator(diag_path)) {
+        if (entry.path().extension() == ".asset") {
+            dialogue_graphs++;
+            assets_to_process.push_back(entry.path());
+        }
     }
 
     NovelStats stats;
     unsigned int threads = std::thread::hardware_concurrency();
     {
         ThreadPool pool(threads > 0 ? threads : 4);
-        for (const auto& entry : fs::recursive_directory_iterator(diag_path)) {
-            if (entry.path().extension() == ".asset") {
-                pool.enqueue([&stats, p = entry.path()]() { process_dialogue_file(p, stats); });
-            }
+        for (const auto& p : assets_to_process) {
+            pool.enqueue([&stats, p]() { process_dialogue_file(p, stats); });
         }
     }
 
     size_t char_assets = 0;
-    for (const auto& entry : fs::directory_iterator(char_path)) {
-        if (entry.path().extension() == ".asset") char_assets++;
+    if (c_f) {
+        for (const auto& entry : fs::directory_iterator(char_path)) {
+            if (entry.path().extension() == ".asset") char_assets++;
+        }
     }
 
     double playtime_mins = (stats.total_chars / 800.0 * 1.2) + (stats.total_wait_seconds / 60.0);
     size_t avg = (stats.total_sentences ? stats.total_chars / stats.total_sentences : 0);
 
-    std::cout << "\n--- SNEngine Project Verified ---" << std::endl;
-    std::cout << "Characters: " << char_assets << std::endl;
-    std::cout << "Nodes:      " << stats.total_nodes << std::endl;
-    std::cout << "Dialogs:    " << stats.dialogue_nodes << std::endl;
-    std::cout << "Sentences:  " << stats.total_sentences << std::endl;
-    std::cout << "Chars:      " << stats.total_chars << std::endl;
-    std::cout << "Wait Time:  " << (int)stats.total_wait_seconds << "s" << std::endl;
-    std::cout << "Average:    " << avg << " chars/sent" << std::endl;
-    std::cout << "Playtime:   " << (int)playtime_mins / 60 << "h " << (int)playtime_mins % 60 << "m" << std::endl;
+    std::cout << "\n--- SNEngine Analytics ---" << std::endl;
+    std::cout << "Dialogue Graphs: " << dialogue_graphs << std::endl;
+    std::cout << "Characters:      " << char_assets << std::endl;
+    std::cout << "Total Nodes:     " << stats.total_nodes << std::endl;
+    std::cout << "Text Blocks:     " << stats.dialogue_nodes << std::endl;
+    std::cout << "Chars (Unicode): " << stats.total_chars << std::endl;
+    std::cout << "Playtime:        " << (int)playtime_mins / 60 << "h " << (int)playtime_mins % 60 << "m" << std::endl;
 
     if (!json_out.empty()) {
         std::ofstream jf(json_out);
-        jf << "{\n"
-           << "  \"engine\": \"SNEngine\",\n"
-           << "  \"characters\": " << char_assets << ",\n"
-           << "  \"nodes\": " << stats.total_nodes << ",\n"
-           << "  \"dialogues\": " << stats.dialogue_nodes << ",\n"
-           << "  \"sentences\": " << stats.total_sentences << ",\n"
-           << "  \"chars\": " << stats.total_chars << ",\n"
-           << "  \"wait_time_seconds\": " << (int)stats.total_wait_seconds << ",\n"
-           << "  \"avg_chars_per_sentence\": " << avg << ",\n"
-           << "  \"estimated_playtime_minutes\": " << std::fixed << std::setprecision(2) << playtime_mins << "\n"
-           << "}";
+        if (jf.is_open()) {
+            jf << "{\n"
+               << "  \"graphs\": " << dialogue_graphs << ",\n"
+               << "  \"characters\": " << char_assets << ",\n"
+               << "  \"nodes\": " << stats.total_nodes << ",\n"
+               << "  \"dialogues\": " << stats.dialogue_nodes << ",\n"
+               << "  \"chars\": " << stats.total_chars << ",\n"
+               << "  \"estimated_playtime_minutes\": " << std::fixed << std::setprecision(2) << playtime_mins << "\n"
+               << "}";
+            std::cout << "Report saved to: " << json_out << std::endl;
+        } else {
+            std::cerr << "Error: Could not open " << json_out << " for writing!" << std::endl;
+        }
     }
+
     return 0;
 }
