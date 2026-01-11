@@ -119,10 +119,38 @@ namespace fs {
 
     inline bool remove_all(const path& p) {
 #ifdef _WIN32
-        // For Windows, use system command to remove directory tree
-        std::string cmd = "rd /s /q \"" + p.string() + "\" 2>nul";
-        int result = system(cmd.c_str());
-        return result == 0;
+        if (is_directory(p)) {
+            // For directories on Windows, use robocopy method to handle locked files
+            std::string tempDir = p.string() + "_temp_delete";
+            std::string cmd = "mkdir \"" + tempDir + "\" >nul 2>&1 && robocopy \"" + tempDir + "\" \"" + p.string() + "\" /MIR >nul 2>&1 && rmdir \"" + tempDir + "\" >nul 2>&1";
+            int result = system(cmd.c_str());
+            // If robocopy fails, fallback to rd command
+            if (result != 0) {
+                cmd = "rd /s /q \"" + p.string() + "\" 2>nul";
+                result = system(cmd.c_str());
+            }
+            return result == 0;
+        } else {
+            // For individual files on Windows, try multiple methods
+            // First try standard DeleteFile
+            if (DeleteFileA(p.string().c_str()) != 0) {
+                return true;
+            }
+
+            // If that fails, try moving to temp location and deleting from there
+            char tempPath[MAX_PATH];
+            GetTempPathA(MAX_PATH, tempPath);
+            std::string tempFile = std::string(tempPath) + p.filename();
+
+            if (MoveFileA(p.string().c_str(), tempFile.c_str()) != 0) {
+                return DeleteFileA(tempFile.c_str()) != 0;
+            }
+
+            // Last resort: try system del command
+            std::string cmd = "del /f /q \"" + p.string() + "\" 2>nul";
+            int result = system(cmd.c_str());
+            return result == 0;
+        }
 #else
         std::string cmd = "rm -rf \"" + p.string() + "\"";
         int result = system(cmd.c_str());
